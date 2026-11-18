@@ -1,6 +1,6 @@
-# TD Live
+# Tiger Droppings iOS App (TD Live)
 
-A fast, chat-style iPhone reader for the [TigerDroppings](https://www.tigerdroppings.com) forums.
+A fast, chat-style Tiger Droppings app for iPhone: an unofficial reader for the [TigerDroppings](https://www.tigerdroppings.com) LSU forums.
 
 **Try it on TestFlight:** https://testflight.apple.com/join/w8mq3tyb
 
