@@ -1,0 +1,10 @@
+build/
+DerivedData/
+*.xcarchive
+*.ipa
+xcuserdata/
+.DS_Store
+# private release tooling (API key ids, contact info)
+scripts/
+ExportOptions.plist
+*.p8
