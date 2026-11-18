@@ -39,7 +39,8 @@ struct RootView: View {
         }
         .tint(.lsuGold)
         .preferredColorScheme(.dark)
-        .sheet(isPresented: $auth.showLogin) { LoginView() }
+        .appTextSize()
+        .sheet(isPresented: $auth.showLogin) { LoginView().appTextSize() }
         .onAppear { if UserDefaults.standard.bool(forKey: "demoLogin") { auth.showLogin = true } }
         .task { if AuthModel.shared.loggedIn { await AuthModel.shared.verify() } }
     }
@@ -93,6 +94,16 @@ struct SettingsView: View {
                 }
             }
             Section {
+                TextSizeSettings()
+                TextSizePreview()
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.black)
+            } header: {
+                Text("Text size")
+            } footer: {
+                Text("Scales the whole app: posts, titles, buttons, spacing and vote bars.")
+            }
+            Section {
                 Toggle("Tint thread list by first-post votes", isOn: $tintThreadList)
                 Toggle("Show images in posts", isOn: $showImages)
             } footer: {
@@ -106,7 +117,7 @@ struct SettingsView: View {
                         Spacer()
                         Text(String(format: "%+.2f", VoteHeat.score(up: u, down: d))).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal, 10).padding(.vertical, 8)
+                    .scaledPadding(h: 10, v: 8)
                     .voteEdges(up: u, down: d)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.black)

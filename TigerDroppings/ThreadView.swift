@@ -194,6 +194,12 @@ struct ThreadView: View {
     @State private var quoteTarget = false
     @State private var sending = false
     @State private var showSummary = UserDefaults.standard.bool(forKey: "demoSummary")
+    @State private var summary = SummaryModel()      // cached across opens
+    @State private var pendingJump: String?          // post picked in the summary
+    @State private var fromSummary = false           // back button returns to the summary
+    @State private var highlightId: String?
+    @ScaledMetric private var sepGap: CGFloat = 8
+    @ScaledMetric private var dividerPad: CGFloat = 12
     @State private var resume: ReadPosition?
     @State private var liveSeen = 0
     private var reads: ReadStore { ReadStore.shared }
@@ -228,16 +234,24 @@ struct ThreadView: View {
                                     .fixedSize()
                                 Rectangle().fill(Color.lsuGold.opacity(0.7)).frame(height: 1)
                             }
-                            .padding(.horizontal, 12).padding(.bottom, 8)
+                            .padding(.horizontal, dividerPad).padding(.bottom, sepGap)
                             .id("unread")
                         }
                         PostRow(post: post, isOP: post.author == thread.author,
                                 onVote: { up in vote(post, up: up) },
                                 onReply: { quote in startReply(post, quote: quote) })
+                            .overlay {
+                                if highlightId == post.id {
+                                    Rectangle().fill(Color.lsuGold.opacity(0.16))
+                                        .overlay(Rectangle().stroke(Color.lsuGold, lineWidth: 2))
+                                        .allowsHitTesting(false)
+                                        .transition(.opacity)
+                                }
+                            }
                             .id(post.id)
                             .onAppear { reads.markSeen(threadId: thread.id, post: post, replyCount: thread.replies + liveSeen) }
                         Rectangle().fill(VoteHeat.separator).frame(height: 1)
-                            .padding(.vertical, 8)
+                            .padding(.vertical, sepGap)
                     }
                     footer
                     Color.clear.frame(height: 1).id("bottom")
@@ -253,7 +267,23 @@ struct ThreadView: View {
             .toolbar(.hidden, for: .tabBar)
             .background(Color.black)
             .defaultScrollAnchor(model.live ? .bottom : .top)
+            .navigationBarBackButtonHidden(fromSummary)
             .toolbar {
+                if fromSummary {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            fromSummary = false
+                            highlightId = nil
+                            showSummary = true
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: "chevron.left").fontWeight(.semibold)
+                                Text("Summary")
+                            }
+                        }
+                        .accessibilityLabel("Back to thread summary")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         model.live.toggle()
@@ -294,7 +324,12 @@ struct ThreadView: View {
                     proxy.scrollTo(r.lastPostId, anchor: .top)
                 }
             }
-            .sheet(isPresented: $showSummary) { SummaryView(model: model) }
+            .sheet(isPresented: $showSummary, onDismiss: { jumpToPicked(proxy) }) {
+                SummaryView(model: model, summary: summary) { post in
+                    pendingJump = post.id
+                    showSummary = false
+                }
+            }
             .task(id: model.live) {
                 guard model.live else { return }
                 await model.jumpToLatest()
@@ -417,9 +452,9 @@ struct ThreadView: View {
                         .background(Color(white: 0.13), in: RoundedRectangle(cornerRadius: 18))
                         .foregroundStyle(.white)
                     Button { send(proxy) } label: {
-                        if sending { ProgressView().frame(width: 34, height: 34) }
+                        if sending { ProgressView().frame(minWidth: 34, minHeight: 34) }
                         else {
-                            Image(systemName: "arrow.up.circle.fill").font(.system(size: 32))
+                            Image(systemName: "arrow.up.circle.fill").font(.largeTitle)
                                 .foregroundStyle(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray : Color.lsuGold)
                         }
                     }
@@ -467,6 +502,26 @@ struct ThreadView: View {
         }
     }
 
+    /// After the summary sheet closes on a picked post: scroll to it, flash it, and
+    /// swap the back button for "‹ Summary" so going back reopens the summary.
+    private func jumpToPicked(_ proxy: ScrollViewProxy) {
+        guard let id = pendingJump else { return }
+        pendingJump = nil
+        guard model.posts.contains(where: { $0.id == id }) else {
+            alertText = "That post isn't loaded anymore. Open the summary again to refresh it."
+            return
+        }
+        model.live = false            // don't let Live yank the view to the bottom
+        fromSummary = true
+        Task {
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(id, anchor: .top) }
+            withAnimation(.easeIn(duration: 0.2)) { highlightId = id }
+            try? await Task.sleep(nanoseconds: 2_200_000_000)
+            if highlightId == id { withAnimation(.easeOut(duration: 0.6)) { highlightId = nil } }
+        }
+    }
+
     private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool) {
         if animated { withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("bottom", anchor: .bottom) } }
         else { proxy.scrollTo("bottom", anchor: .bottom) }
@@ -479,13 +534,21 @@ struct PostRow: View {
     var onVote: (Bool) -> Void = { _ in }
     var onReply: (Bool) -> Void = { _ in }
     @AppStorage("showImages") private var showImages = true
+    @ScaledMetric private var gap: CGFloat = 7
+    @ScaledMetric private var vPad: CGFloat = 12
+    @ScaledMetric private var hPad: CGFloat = 14
+    @ScaledMetric private var actionGap: CGFloat = 18
+    @ScaledMetric private var icon: CGFloat = 24
+    @ScaledMetric private var imgW: CGFloat = 280
+    @ScaledMetric private var imgH: CGFloat = 240
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: gap) {
             HStack(spacing: 6) {
                 Text(post.author).font(.subheadline.weight(.bold))
                     .foregroundStyle(isOP ? Color.lsuGold : .white)
-                if isOP { Text("OP").font(.system(size: 10, weight: .heavy)).padding(.horizontal, 4).padding(.vertical, 1)
+                    .lineLimit(1).layoutPriority(1)
+                if isOP { Text("OP").font(.caption2.weight(.heavy)).padding(.horizontal, 4).padding(.vertical, 1)
                     .background(Color.lsuGold, in: RoundedRectangle(cornerRadius: 3)).foregroundStyle(.black) }
                 if let r = post.replyTo { Text("→ \(r)").font(.caption).foregroundStyle(.secondary).lineLimit(1) }
                 Spacer(minLength: 4)
@@ -503,13 +566,13 @@ struct PostRow: View {
                         .background(VoteHeat.quoteBox, in: RoundedRectangle(cornerRadius: 6))
                 case .image(let u) where u.path.lowercased().contains("/images/icons/"):
                     AsyncImage(url: u) { $0.resizable().interpolation(.none).scaledToFit() } placeholder: { Color.clear }
-                        .frame(width: 24, height: 24)
+                        .frame(width: icon, height: icon)
                 case .image(let u):
                     if showImages {
                         AsyncImage(url: u) { img in
                             img.resizable().scaledToFit()
                         } placeholder: { Color.secondary.opacity(0.1).frame(height: 60) }
-                        .frame(maxWidth: 280, maxHeight: 240, alignment: .leading)
+                        .frame(maxWidth: imgW, maxHeight: imgH, alignment: .leading)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     } else {
                         Link("🖼 image", destination: u).font(.caption)
@@ -520,31 +583,15 @@ struct PostRow: View {
                          : u).font(.subheadline)
                 }
             }
-            // Action bar: vote + reply
-            HStack(spacing: 18) {
-                Button { onVote(true) } label: {
-                    Label("\(post.up)", systemImage: post.myVote == 1 ? "arrowshape.up.fill" : "arrowshape.up")
-                        .foregroundStyle(post.myVote == 1 ? VoteHeat.green : Color(white: 0.75))
-                }
-                .accessibilityLabel("Upvote, \(post.up)")
-                Button { onVote(false) } label: {
-                    Label("\(post.down)", systemImage: post.myVote == -1 ? "arrowshape.down.fill" : "arrowshape.down")
-                        .foregroundStyle(post.myVote == -1 ? VoteHeat.red : Color(white: 0.75))
-                }
-                .accessibilityLabel("Downvote, \(post.down)")
-                Spacer()
-                Button { onReply(true) } label: { Label("Quote", systemImage: "quote.opening") }
-                    .foregroundStyle(Color(white: 0.75))
-                Button { onReply(false) } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
-                    .foregroundStyle(Color(white: 0.75))
+            // Action bar: vote + reply. At big text sizes Quote/Reply drop to icons.
+            ViewThatFits(in: .horizontal) {
+                actionBar(compact: false)
+                actionBar(compact: true)
             }
-            .font(.caption.weight(.semibold).monospacedDigit())
-            .labelStyle(.titleAndIcon)
-            .buttonStyle(.borderless)
             .padding(.top, 2)
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 14)
+        .padding(.vertical, vPad)
+        .padding(.horizontal, hPad)
         .voteEdges(up: post.up, down: post.down)
         .contextMenu {
             Button { onReply(false) } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
@@ -553,5 +600,36 @@ struct PostRow: View {
             Button { onVote(false) } label: { Label("Downvote", systemImage: "arrowshape.down") }
             Button { UIPasteboard.general.string = post.blocks.compactMap { if case .text(let a) = $0 { return String(a.characters) }; return nil }.joined(separator: "\n") } label: { Label("Copy text", systemImage: "doc.on.doc") }
         }
+    }
+
+    private func actionBar(compact: Bool) -> some View {
+        HStack(spacing: actionGap) {
+            Button { onVote(true) } label: {
+                Label("\(post.up)", systemImage: post.myVote == 1 ? "arrowshape.up.fill" : "arrowshape.up")
+                    .foregroundStyle(post.myVote == 1 ? VoteHeat.green : Color(white: 0.75))
+            }
+            .accessibilityLabel("Upvote, \(post.up)")
+            Button { onVote(false) } label: {
+                Label("\(post.down)", systemImage: post.myVote == -1 ? "arrowshape.down.fill" : "arrowshape.down")
+                    .foregroundStyle(post.myVote == -1 ? VoteHeat.red : Color(white: 0.75))
+            }
+            .accessibilityLabel("Downvote, \(post.down)")
+            Spacer(minLength: 8)
+            Button { onReply(true) } label: {
+                if compact { Image(systemName: "quote.opening") } else { Label("Quote", systemImage: "quote.opening") }
+            }
+            .foregroundStyle(Color(white: 0.75))
+            .accessibilityLabel("Quote")
+            Button { onReply(false) } label: {
+                if compact { Image(systemName: "arrowshape.turn.up.left") } else { Label("Reply", systemImage: "arrowshape.turn.up.left") }
+            }
+            .foregroundStyle(Color(white: 0.75))
+            .accessibilityLabel("Reply")
+        }
+        .font(.caption.weight(.semibold).monospacedDigit())
+        .labelStyle(.titleAndIcon)
+        .buttonStyle(.borderless)
+        .lineLimit(1)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }

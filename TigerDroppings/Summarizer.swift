@@ -17,10 +17,11 @@ struct LocalSummary {
         postCount = posts.count
         let pg = Set(posts.map(\.page)).sorted()
         pages = pg.isEmpty ? "-" : (pg.first == pg.last ? "page \(pg[0])" : "pages \(pg.first!)–\(pg.last!)")
-        topPosts = Array(posts.sorted { (a: Post, b: Post) -> Bool in
+        // Every post with more up- than downvotes, best first. No cap.
+        topPosts = posts.filter { $0.up > $0.down }.sorted { (a: Post, b: Post) -> Bool in
             let sa = a.up - a.down, sb = b.up - b.down
             return sa == sb ? a.up > b.up : sa > sb
-        }.prefix(5))
+        }
         func top(_ names: [String]) -> [(String, Int)] {
             var counts: [String: Int] = [:]
             for n in names { counts[n, default: 0] += 1 }
@@ -56,6 +57,19 @@ final class SummaryModel {
     var aiText = ""
     var note: String?            // why AI isn't available / what went wrong
     var local: LocalSummary?
+    var started = false          // cached: reopening the sheet doesn't regenerate
+
+    @MainActor func runIfNeeded(model: ThreadModel) async {
+        guard !started else { return }
+        started = true
+        await run(model: model)
+    }
+
+    @MainActor func regenerate(model: ThreadModel) async {
+        aiText = ""; note = nil; local = nil
+        started = true
+        await run(model: model)
+    }
 
     /// nil when the on-device model can be used.
     static func aiUnavailableReason() -> String? {
@@ -172,27 +186,47 @@ final class SummaryModel {
 
 struct SummaryView: View {
     let model: ThreadModel
-    @State private var summary = SummaryModel()
+    let summary: SummaryModel          // owned by ThreadView so it survives dismiss / re-open
+    var onOpen: (Post) -> Void = { _ in }
     @Environment(\.dismiss) private var dismiss
+    @ScaledMetric private var pad: CGFloat = 16
+    @ScaledMetric private var gap: CGFloat = 16
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: gap) {
                     Text(model.title).font(.headline).foregroundStyle(.white)
                     aiSection
                     if let l = summary.local { localSection(l) }
                 }
-                .padding(16)
+                .padding(pad)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(Color.black)
             .navigationTitle("Thread Summary")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .task { await summary.run(model: model) }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { Task { await summary.regenerate(model: model) } } label: { Image(systemName: "arrow.clockwise") }
+                        .accessibilityLabel("Regenerate summary")
+                        .disabled(summary.phase == .loading || summary.phase == .generating)
+                }
+            }
+            .task { await summary.runIfNeeded(model: model) }
+            .task(id: summary.local?.postCount) {
+                // Debug hook for simulator testing: -demoJumpTop N opens the Nth top post
+                let n = UserDefaults.standard.integer(forKey: "demoJumpTop")
+                guard n > 0, let l = summary.local, !l.topPosts.isEmpty else { return }
+                let p = l.topPosts[min(n, l.topPosts.count) - 1]
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                UserDefaults.standard.set(0, forKey: "demoJumpTop")
+                onOpen(p)
+            }
         }
         .preferredColorScheme(.dark)
+        .appTextSize()
     }
 
     @ViewBuilder private var aiSection: some View {
@@ -227,18 +261,35 @@ struct SummaryView: View {
                 .font(.subheadline.weight(.bold)).foregroundStyle(Color.lsuGold)
             Text("Based on \(l.postCount) loaded posts (\(l.pages)) · ▲\(l.totalUp) ▼\(l.totalDown)")
                 .font(.caption).foregroundStyle(.secondary)
-            Text("Top-voted posts").font(.footnote.weight(.semibold)).foregroundStyle(.white)
-            ForEach(l.topPosts) { p in
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack {
-                        Text(p.author).font(.footnote.weight(.bold)).foregroundStyle(.white)
-                        Spacer()
-                        Text("▲\(p.up) ▼\(p.down)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            Text("Top-voted posts (\(l.topPosts.count))").font(.footnote.weight(.semibold)).foregroundStyle(.white)
+            if l.topPosts.isEmpty {
+                Text("No upvoted posts yet.").font(.footnote).foregroundStyle(.secondary)
+            } else {
+                Text("Tap a post to jump to it in the thread.").font(.caption2).foregroundStyle(.secondary)
+            }
+            LazyVStack(alignment: .leading, spacing: 8) {
+                ForEach(l.topPosts) { p in
+                    Button { onOpen(p) } label: {
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack {
+                                    Text(p.author).font(.footnote.weight(.bold)).foregroundStyle(.white)
+                                    Text("p.\(p.page)").font(.caption2).foregroundStyle(.secondary)
+                                    Spacer()
+                                    Text("▲\(p.up) ▼\(p.down)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                }
+                                Text(p.plainText).font(.footnote).foregroundStyle(Color(white: 0.8)).lineLimit(3)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).foregroundStyle(.tertiary)
+                        }
+                        .scaledPadding(h: 10, v: 8)
+                        .contentShape(Rectangle())
+                        .voteEdges(up: p.up, down: p.down)
                     }
-                    Text(p.plainText).font(.footnote).foregroundStyle(Color(white: 0.8)).lineLimit(3)
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens this post in the thread")
                 }
-                .padding(.vertical, 8).padding(.horizontal, 10)
-                .voteEdges(up: p.up, down: p.down)
             }
             if !l.activeUsers.isEmpty {
                 Text("Most active posters").font(.footnote.weight(.semibold)).foregroundStyle(.white)

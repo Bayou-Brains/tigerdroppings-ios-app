@@ -32,11 +32,12 @@ enum VoteHeat {
 struct VoteEdges: ViewModifier {
     let up: Int
     let down: Int
+    @ScaledMetric(relativeTo: .body) private var width: CGFloat = VoteHeat.barWidth
     func body(content: Content) -> some View {
         HStack(spacing: 0) {
-            Rectangle().fill(VoteHeat.bar(up: up, down: down)).frame(width: VoteHeat.barWidth)
+            Rectangle().fill(VoteHeat.bar(up: up, down: down)).frame(width: width)
             content.frame(maxWidth: .infinity, alignment: .leading)
-            Rectangle().fill(VoteHeat.bar(up: up, down: down)).frame(width: VoteHeat.barWidth)
+            Rectangle().fill(VoteHeat.bar(up: up, down: down)).frame(width: width)
         }
         .background(Color.black)
     }
@@ -44,4 +45,16 @@ struct VoteEdges: ViewModifier {
 
 extension View {
     func voteEdges(up: Int, down: Int) -> some View { modifier(VoteEdges(up: up, down: down)) }
+}
+
+/// Padding that grows and shrinks with the app's text size.
+struct ScaledPadding: ViewModifier {
+    @ScaledMetric private var h: CGFloat
+    @ScaledMetric private var v: CGFloat
+    init(h: CGFloat, v: CGFloat) { _h = ScaledMetric(wrappedValue: h); _v = ScaledMetric(wrappedValue: v) }
+    func body(content: Content) -> some View { content.padding(.horizontal, h).padding(.vertical, v) }
+}
+
+extension View {
+    func scaledPadding(h: CGFloat = 0, v: CGFloat = 0) -> some View { modifier(ScaledPadding(h: h, v: v)) }
 }

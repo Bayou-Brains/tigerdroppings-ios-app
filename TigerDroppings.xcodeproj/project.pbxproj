@@ -15,6 +15,7 @@
 		7C0D496739800E8BC7D29375 /* Scraper.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE2F78D8CE34C7739EE59B77 /* Scraper.swift */; };
 		A3BDD144D55EDF07A197171F /* Summarizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8191052FADB425BF9B83C0A /* Summarizer.swift */; };
 		BE40DF92468835C77794E718 /* Posting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D123300B25AA1662DDA8753 /* Posting.swift */; };
+		C8003531701E1EA72C33C8DA /* TextSize.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FA8284F9DF84EFA04E9967D /* TextSize.swift */; };
 		D23BDA4C6D38FCF0537601CC /* ThreadListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 987056CE75625880FB3740E0 /* ThreadListView.swift */; };
 		DE66688837C5FE126B094175 /* ReadStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D76C80105F47FEEF5F2F26B /* ReadStore.swift */; };
 /* End PBXBuildFile section */
@@ -22,6 +23,7 @@
 /* Begin PBXFileReference section */
 		016E436F8C3444AD1E7680CD /* Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Auth.swift; sourceTree = "<group>"; };
 		0A4F571B2A22B8978B26136A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		3FA8284F9DF84EFA04E9967D /* TextSize.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextSize.swift; sourceTree = "<group>"; };
 		53DE76D869EB931151019D49 /* ThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadView.swift; sourceTree = "<group>"; };
 		5D76C80105F47FEEF5F2F26B /* ReadStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadStore.swift; sourceTree = "<group>"; };
 		704DC122E0590BC08486D1E9 /* VoteColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoteColor.swift; sourceTree = "<group>"; };
@@ -62,6 +64,7 @@
 				5D76C80105F47FEEF5F2F26B /* ReadStore.swift */,
 				AE2F78D8CE34C7739EE59B77 /* Scraper.swift */,
 				E8191052FADB425BF9B83C0A /* Summarizer.swift */,
+				3FA8284F9DF84EFA04E9967D /* TextSize.swift */,
 				987056CE75625880FB3740E0 /* ThreadListView.swift */,
 				53DE76D869EB931151019D49 /* ThreadView.swift */,
 				704DC122E0590BC08486D1E9 /* VoteColor.swift */,
@@ -146,6 +149,7 @@
 				DE66688837C5FE126B094175 /* ReadStore.swift in Sources */,
 				7C0D496739800E8BC7D29375 /* Scraper.swift in Sources */,
 				A3BDD144D55EDF07A197171F /* Summarizer.swift in Sources */,
+				C8003531701E1EA72C33C8DA /* TextSize.swift in Sources */,
 				D23BDA4C6D38FCF0537601CC /* ThreadListView.swift in Sources */,
 				33EF69FD2239F6CF051AA272 /* ThreadView.swift in Sources */,
 				5A57BA7A49E98A4F05FADC4B /* VoteColor.swift in Sources */,
@@ -190,7 +194,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 6FU8ZY7A39;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -250,7 +254,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 6FU8ZY7A39;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

@@ -107,6 +107,8 @@ struct ThreadRow: View {
     @State private var votes: (Int, Int)?
     private var reads: ReadStore { ReadStore.shared }
     private var newReplies: Int? { reads.newReplies(thread) }
+    @ScaledMetric private var gap: CGFloat = 6
+    @ScaledMetric private var lineGap: CGFloat = 5
 
     var body: some View {
         ZStack {
@@ -121,14 +123,14 @@ struct ThreadRow: View {
     }
 
     private var content: some View {
-        HStack(spacing: 6) {
-            VStack(alignment: .leading, spacing: 5) {
+        HStack(spacing: gap) {
+            VStack(alignment: .leading, spacing: lineGap) {
                 Text(thread.title)
                     .font(.callout.weight(thread.sticky ? .semibold : .regular))
                     .lineSpacing(2)
                     .foregroundStyle(newReplies == 0 ? Color(white: 0.55) : .white)
                     .lineLimit(2)
-                HStack(spacing: 6) {
+                HStack(spacing: gap) {
                     if thread.sticky { Image(systemName: "pin.fill").foregroundStyle(Color.lsuGold) }
                     if let b = thread.boardName { Text(b).foregroundStyle(Color.lsuGold).fontWeight(.semibold) }
                     Text(thread.author)
@@ -138,7 +140,7 @@ struct ThreadRow: View {
                     Spacer(minLength: 0)
                     if let n = newReplies, n > 0 {
                         Text("+\(n)").font(.caption.weight(.heavy)).foregroundStyle(.black)
-                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .scaledPadding(h: 6, v: 1)
                             .background(Color.lsuGold, in: Capsule())
                     }
                     Text(thread.lastPostTime)
@@ -147,9 +149,9 @@ struct ThreadRow: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             }
-            .padding(.vertical, 11)
+            .scaledPadding(v: 11)
             Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).foregroundStyle(.tertiary)
         }
-        .padding(.horizontal, 12)
+        .scaledPadding(h: 12)
     }
 }
