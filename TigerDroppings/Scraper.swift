@@ -187,26 +187,57 @@ enum Parser {
         var threads: [ThreadSummary] = []
         var seen = Set<String>()
         for c in chunks(html, splitOn: "<div class=\"index indRow") {
-            guard let href = first(#"<h2>\s*<a\s+href="([^"]+)""#, in: c),
-                  let titleHTML = first(#"<h2>\s*<a\s+href="[^"]+"\s*>(.*?)</a>"#, in: c),
+            // Game threads use <h2 class="scoreboard-subject">, so allow attributes on <h2>.
+            guard let href = first(#"<h2[^>]*>\s*<a\s+href="([^"]+)""#, in: c),
+                  let titleHTML = first(#"<h2[^>]*>\s*<a\s+href="[^"]+"\s*>(.*?)</a>"#, in: c),
                   let id = first(#"/(\d+)/$"#, in: href), !seen.contains(id) else { continue }
             seen.insert(id)
             let pages = all(#"/page-(\d+)/"#, in: first(#"<span Class= "pg2[^"]*">(.*?)</span>"#, in: c) ?? "")
                 .compactMap { $0[1].flatMap(Int.init) }.max() ?? 1
             threads.append(ThreadSummary(
                 id: id,
-                title: decode(stripTags(titleHTML)),
+                title: threadTitle(titleHTML: titleHTML, row: c),
                 path: href,
                 author: decode(first(#"class=author[^>]*>([^<]+)</a>"#, in: c) ?? ""),
                 replies: Int(first(#"class="cicon"\s*/?>\s*(\d+)"#, in: c) ?? "") ?? 0,
                 lastPostTime: decode(first(#"class="lp"[^>]*>([^<]+)<span"#, in: c) ?? "").trimmingCharacters(in: .whitespaces),
                 lastPostBy: decode(first(#"<span class="lp">([^<]*)</span>"#, in: c) ?? ""),
                 pages: pages,
-                sticky: c.contains("alt=\"sticky post\""),
+                sticky: c.contains("alt=\"sticky post\"") || c.contains("srcstick"),
                 boardName: first(#"<a class="bname"[^>]*>([^<]+)</a>"#, in: c).map(decode)))
         }
         let hasNext = board.pageable && html.contains(TD.boardPagePath(board, page: page + 1))
         return BoardPage(threads: threads, page: page, hasNext: hasNext)
+    }
+
+    /// Pinned game threads put a live scoreboard inside the title link instead of plain text.
+    static func threadTitle(titleHTML: String, row: String) -> String {
+        if row.contains("scoreboard-subject") || row.contains("scoreteam"), let t = scoreboardTitle(row) {
+            return t
+        }
+        return decode(stripTags(titleHTML)).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func scoreboardTitle(_ row: String) -> String? {
+        let teams = all(#"<span class="scoreteam">(?:<span class="score-rank"[^>]*>\s*([^<]*?)\s*</span>)?\s*([^<]*?)\s*</span>"#, in: row)
+        let scores = all(#"class="scorescr[^"]*"[^>]*>\s*([^<]*)"#, in: row)
+            .compactMap { $0[1].map { decode($0).trimmingCharacters(in: .whitespaces) } }
+        var parts: [String] = []
+        for (i, m) in teams.enumerated() {
+            let name = decode(m[2] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { continue }
+            let rank = (m[1].map { decode($0).trimmingCharacters(in: .whitespaces) } ?? "")
+            var part = rank.isEmpty ? name : "#\(rank) \(name)"
+            if i < scores.count, !scores[i].isEmpty { part += " \(scores[i])" }
+            parts.append(part)
+        }
+        guard !parts.isEmpty else { return nil }
+        var title = parts.joined(separator: " – ")
+        if let q = first(#"class="scoreqtr"[^>]*>([^<]+)"#, in: row) {
+            let qtr = decode(q).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !qtr.isEmpty { title += " (\(qtr))" }
+        }
+        return title
     }
 
     // Thread
