@@ -27,6 +27,12 @@ A fast, chat-style Tiger Droppings app for iPhone: an unofficial reader for the 
 - **Text size**: a slider in Settings (about 80% to 160%) that scales the whole app, including posts, titles, buttons, spacing and vote bars.
 - **Optional sign-in** to reply, quote, and up/down vote, using the site's own login page. Your password is never stored; only session cookies, in the Keychain.
 
+## Desktop (Chrome)
+
+A [Tampermonkey userscript](https://raw.githubusercontent.com/Bayou-Brains/tigerdroppings-ios-app/main/web/tdlive.user.js) and an unpacked Chrome extension give the same condensed dark reader, vote bars, Live mode, and resume badges in your browser. The site's own login, reply, and voting keep working.
+
+See [web/README.md](web/README.md) for install steps.
+
 ## Code
 SwiftUI, iOS 17+. The project is generated from `project.yml` with [XcodeGen](https://github.com/yonaskolb/XcodeGen) (a generated `.xcodeproj` is included).
 
