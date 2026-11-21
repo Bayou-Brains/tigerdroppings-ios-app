@@ -20,6 +20,7 @@ A fast, chat-style Tiger Droppings app for iPhone: an unofficial reader for the 
 ## Features
 - **Condensed, dark layout**: black background, white text, dividers between posts.
 - **Vote heat bars**: green/red bars on each post and thread, stronger the more lopsided the votes (20-0 deep green, 10-5 faint green, 5-20 strong red).
+- **Game day**: when Tiger Rant is locked, the app opens the LSU Score Board instead and shows the live score at the top of the board and the game thread. The Score Board is also in the Boards list.
 - **Endless scrolling** through boards and threads.
 - **Live mode**: polls every 5 seconds and drops new posts in place so a thread reads like a chat.
 - **Pick up where you left off**: a "+N" badge for new replies since your last visit, and threads reopen at your last-read post with a "NEW POSTS BELOW" marker.

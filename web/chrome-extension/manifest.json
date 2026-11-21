@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TD Live for Tiger Droppings",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Condensed dark reader for TigerDroppings: vote heat bars, Live mode, and resume where you left off.",
   "icons": {
     "16": "icons/icon16.png",

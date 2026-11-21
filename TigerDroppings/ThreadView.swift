@@ -13,6 +13,7 @@ final class ThreadModel {
     var live = false
     var lastLiveCheck: Date?
     var newPostCount = 0
+    var gameHeader: GameHeader?
 
     init(path: String, title: String) { self.path = path; self.title = title }
 
@@ -21,6 +22,7 @@ final class ThreadModel {
 
     private func apply(_ p: ThreadPage) {
         if p.page == 1 && !p.title.isEmpty { title = p.title }
+        if p.page == 1 { gameHeader = p.gameHeader ?? gameHeader }
         totalPages = max(p.totalPages, p.page)
     }
 
@@ -169,6 +171,10 @@ final class ThreadModel {
         guard !loading else { return 0 }
         var added = 0
         do {
+            // Keep the live score header fresh even when we're watching later pages.
+            if gameHeader != nil && lastPage > 1, let p1 = try? await TD.loadThread(path, page: 1) {
+                apply(p1)
+            }
             var page = max(lastPage, 1)
             while true {
                 let p = try await TD.loadThread(path, page: page)
@@ -219,6 +225,9 @@ struct ThreadView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 0) {
+                    if let h = model.gameHeader {
+                        GameHeaderCard(header: h)
+                    }
                     if model.hasPrevious {
                         Button { Task { await model.loadPrevious() } } label: {
                             Label("Load earlier posts (page \(model.firstPage - 1))", systemImage: "arrow.up.circle")

@@ -23,6 +23,64 @@ struct ThreadSummary: Identifiable, Hashable {
     let boardName: String?
 }
 
+/// Live or pregame score shown at the top of the Score Board and the game thread.
+struct GameHeader: Hashable {
+    var title: String
+    var away: String
+    var home: String
+    var awayRank: String? = nil
+    var homeRank: String? = nil
+    var awayScore: String? = nil
+    var homeScore: String? = nil
+    var awayRecord: String? = nil
+    var homeRecord: String? = nil
+    var status: String? = nil          // kickoff time, quarter, or "Final"
+    var date: String? = nil
+    var tv: String? = nil
+    var venue: String? = nil
+    var notes: String? = nil           // spread / over-under
+    var threadPath: String? = nil
+    var threadId: String? = nil
+
+    var hasScores: Bool {
+        Self.isScoreValue(awayScore) || Self.isScoreValue(homeScore)
+    }
+
+    var detail: String {
+        [status, tv, notes, venue].compactMap { s in
+            let t = (s ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? nil : t
+        }.joined(separator: " · ")
+    }
+
+    static func isScoreValue(_ s: String?) -> Bool {
+        guard let s = s?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return false }
+        return s.allSatisfy(\.isNumber)
+    }
+
+    static func labeled(rank: String?, name: String, score: String? = nil) -> String {
+        var s = name
+        if let r = rank?.trimmingCharacters(in: .whitespacesAndNewlines), !r.isEmpty { s = "#\(r) \(name)" }
+        if isScoreValue(score) { s += " \(score!)" }
+        return s
+    }
+
+    static func makeTitle(away: String, awayRank: String?, awayScore: String?,
+                          home: String, homeRank: String?, homeScore: String?,
+                          status: String?) -> String {
+        let a = labeled(rank: awayRank, name: away, score: awayScore)
+        let b = labeled(rank: homeRank, name: home, score: homeScore)
+        var title = (isScoreValue(awayScore) || isScoreValue(homeScore)) ? "\(a) – \(b)" : "\(a) vs \(b)"
+        if let st = status?.trimmingCharacters(in: .whitespacesAndNewlines), !st.isEmpty {
+            // Don't repeat a pregame kickoff time already used as a "score" slot.
+            if isScoreValue(awayScore) || isScoreValue(homeScore) || !title.contains(st) {
+                title += " (\(st))"
+            }
+        }
+        return title
+    }
+}
+
 enum PostBlock: Hashable {
     case text(AttributedString)
     case quote(AttributedString)
@@ -50,18 +108,23 @@ struct ThreadPage {
     let posts: [Post]
     let page: Int
     let totalPages: Int
+    var gameHeader: GameHeader? = nil
 }
 
 struct BoardPage {
     let threads: [ThreadSummary]
     let page: Int
     let hasNext: Bool
+    var locked: Bool = false
+    var boardTitle: String? = nil
+    var gameHeader: GameHeader? = nil
 }
 
 // MARK: - Boards
 
 enum Boards {
     static let tigerRant = Board(name: "Tiger Rant", path: "/rant/lsu-sports/", subtitle: "Discuss LSU Sports with fellow Tiger fans")
+    static let scoreBoard = Board(name: "LSU Score Board", path: "/rant/lsu-score-board/", subtitle: "Game-day threads and the live score")
     static let trending = Board(name: "Trending", path: "/rant/a/trending/", subtitle: "Hot threads across all boards", pageable: false)
     static let active = Board(name: "Active", path: "/rant/a/active/", subtitle: "Most recently active threads", pageable: false)
     static let new = Board(name: "New", path: "/rant/a/new/", subtitle: "Newest threads", pageable: false)
@@ -69,6 +132,7 @@ enum Boards {
     static let sections: [(String, [Board])] = [
         ("LSU", [
             tigerRant,
+            scoreBoard,
             Board(name: "LSU Recruiting", path: "/rant/lsu-recruiting/", subtitle: "Discuss the future of LSU Football"),
             Board(name: "Ticket Exchange", path: "/rant/lsu-tickets/", subtitle: "Buy, sell and trade"),
         ]),
@@ -186,12 +250,14 @@ enum Parser {
     static func boardPage(_ html: String, board: Board, page: Int) -> BoardPage {
         var threads: [ThreadSummary] = []
         var seen = Set<String>()
+        var header: GameHeader? = nil
         for c in chunks(html, splitOn: "<div class=\"index indRow") {
             // Game threads use <h2 class="scoreboard-subject">, so allow attributes on <h2>.
             guard let href = first(#"<h2[^>]*>\s*<a\s+href="([^"]+)""#, in: c),
                   let titleHTML = first(#"<h2[^>]*>\s*<a\s+href="[^"]+"\s*>(.*?)</a>"#, in: c),
                   let id = first(#"/(\d+)/$"#, in: href), !seen.contains(id) else { continue }
             seen.insert(id)
+            if header == nil, let gh = gameHeaderFromBoardRow(c, path: href, id: id) { header = gh }
             let pages = all(#"/page-(\d+)/"#, in: first(#"<span Class= "pg2[^"]*">(.*?)</span>"#, in: c) ?? "")
                 .compactMap { $0[1].flatMap(Int.init) }.max() ?? 1
             threads.append(ThreadSummary(
@@ -206,43 +272,102 @@ enum Parser {
                 sticky: c.contains("alt=\"sticky post\"") || c.contains("srcstick"),
                 boardName: first(#"<a class="bname"[^>]*>([^<]+)</a>"#, in: c).map(decode)))
         }
-        let hasNext = board.pageable && html.contains(TD.boardPagePath(board, page: page + 1))
-        return BoardPage(threads: threads, page: page, hasNext: hasNext)
+        // Pagination: if the site served the Score Board under the Rant URL (game-day
+        // redirect), look for the score-board page-2 link instead of the requested path.
+        var pageablePath = board.path
+        if isScoreBoardPage(html) { pageablePath = Boards.scoreBoard.path }
+        let hasNext = board.pageable && html.contains(pageablePath + "page-\(page + 1)/")
+        return BoardPage(threads: threads, page: page, hasNext: hasNext,
+                         locked: isBoardLocked(html),
+                         boardTitle: boardTitle(html),
+                         gameHeader: header)
+    }
+
+    static func isBoardLocked(_ html: String) -> Bool {
+        html.contains("err-lock") || html.localizedCaseInsensitiveContains("This forum is currently locked")
+    }
+
+    static func isScoreBoardPage(_ html: String) -> Bool {
+        if let name = boardTitle(html), name.localizedCaseInsensitiveContains("Score Board") { return true }
+        if let canon = first(#"rel="canonical" href="([^"]+)""#, in: html),
+           canon.localizedCaseInsensitiveContains("/rant/lsu-score-board") { return true }
+        return false
+    }
+
+    static func boardTitle(_ html: String) -> String? {
+        let raw = first(#"class="MessName"[^>]*>([^<]+)"#, in: html)
+            ?? first(#"<h1 class="PgBoardNameT"[^>]*>\s*<a[^>]*>([^<]+)"#, in: html)
+        guard let raw else { return nil }
+        let name = decode(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? nil : name
     }
 
     /// Pinned game threads put a live scoreboard inside the title link instead of plain text.
     static func threadTitle(titleHTML: String, row: String) -> String {
-        if row.contains("scoreboard-subject") || row.contains("scoreteam"), let t = scoreboardTitle(row) {
-            return t
-        }
+        if let h = gameHeaderFromBoardRow(row) { return h.title }
         return decode(stripTags(titleHTML)).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func scoreboardTitle(_ row: String) -> String? {
+        gameHeaderFromBoardRow(row)?.title
+    }
+
+    static func gameHeaderFromBoardRow(_ row: String, path: String? = nil, id: String? = nil) -> GameHeader? {
+        guard row.contains("scoreboard-subject") || row.contains("scoreteam") else { return nil }
         let teams = all(#"<span class="scoreteam">(?:<span class="score-rank"[^>]*>\s*([^<]*?)\s*</span>)?\s*([^<]*?)\s*</span>"#, in: row)
-        let scores = all(#"class="scorescr[^"]*"[^>]*>\s*([^<]*)"#, in: row)
-            .compactMap { $0[1].map { decode($0).trimmingCharacters(in: .whitespaces) } }
-        var parts: [String] = []
-        for (i, m) in teams.enumerated() {
+        var names: [(rank: String?, name: String)] = []
+        for m in teams {
             let name = decode(m[2] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { continue }
-            let rank = (m[1].map { decode($0).trimmingCharacters(in: .whitespaces) } ?? "")
-            var part = rank.isEmpty ? name : "#\(rank) \(name)"
-            if i < scores.count, !scores[i].isEmpty { part += " \(scores[i])" }
-            parts.append(part)
+            let rank = decode(m[1] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            names.append((rank.isEmpty ? nil : rank, name))
         }
-        guard !parts.isEmpty else { return nil }
-        var title = parts.joined(separator: " – ")
-        if let q = first(#"class="scoreqtr"[^>]*>([^<]+)"#, in: row) {
-            let qtr = decode(q).trimmingCharacters(in: .whitespacesAndNewlines)
-            if !qtr.isEmpty { title += " (\(qtr))" }
+        guard names.count >= 2 else { return nil }
+        let slots = all(#"class="scorescr[^"]*"[^>]*>\s*([^<]*)"#, in: row)
+            .compactMap { $0[1].map { decode($0).trimmingCharacters(in: .whitespacesAndNewlines) } }
+            .filter { !$0.isEmpty }
+        var awayScore: String? = nil
+        var homeScore: String? = nil
+        var tv: String? = first(#"class="scoretv(?:desktop)?"[^>]*>([^<]+)"#, in: row).map {
+            decode($0).trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        return title
+        if slots.count >= 2, GameHeader.isScoreValue(slots[0]) || GameHeader.isScoreValue(slots[1]) {
+            if GameHeader.isScoreValue(slots[0]) { awayScore = slots[0] }
+            if GameHeader.isScoreValue(slots[1]) { homeScore = slots[1] }
+            if let extra = slots.first(where: { !GameHeader.isScoreValue($0) }), tv == nil || tv?.isEmpty == true {
+                tv = extra
+            }
+        } else if slots.count >= 2, tv == nil || tv?.isEmpty == true {
+            tv = slots[1]
+        }
+        if tv?.isEmpty == true { tv = nil }
+        let status = first(#"class="scoreqtr"[^>]*>([^<]+)"#, in: row).map {
+            decode($0).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let notes = first(#"class="scorenotes"[^>]*>([^<]+)"#, in: row).map {
+            decode($0).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let title = GameHeader.makeTitle(away: names[0].name, awayRank: names[0].rank, awayScore: awayScore,
+                                         home: names[1].name, homeRank: names[1].rank, homeScore: homeScore,
+                                         status: status)
+        return GameHeader(title: title, away: names[0].name, home: names[1].name,
+                          awayRank: names[0].rank, homeRank: names[1].rank,
+                          awayScore: awayScore, homeScore: homeScore,
+                          status: status?.isEmpty == true ? nil : status,
+                          tv: tv, notes: notes?.isEmpty == true ? nil : notes,
+                          threadPath: path, threadId: id)
     }
 
     // Thread
     static func threadPage(_ html: String, page: Int) -> ThreadPage {
-        let title = decode(stripTags(first(#"<h1 class="SubjectDisplay[^"]*">(.*?)</h1>"#, in: html) ?? ""))
+        let gameHeader = gameHeaderFromGameThread(html)
+        var title = decode(stripTags(first(#"<h1 class="SubjectDisplay[^"]*">(.*?)</h1>"#, in: html) ?? ""))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if title.isEmpty, let t = first(#"<title[^>]*>(.*?)</title>"#, in: html) {
+            title = decode(stripTags(t)).components(separatedBy: "|").first?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        }
+        if title.isEmpty, let g = gameHeader { title = g.title }
         var total = Int(first(#"Page\s+\d+\s+of\s+(\d+)"#, in: html) ?? "") ?? 0
         if total == 0 {
             total = all(#"class="pg" href="[^"]*/page-(\d+)/""#, in: html).compactMap { $0[1].flatMap(Int.init) }.max() ?? 1
@@ -253,6 +378,7 @@ enum Parser {
             guard let m = all(#"<div class="pText" id="ptext_(\d+)"\s*>(.*?)<div class="mtdivide">"#, in: c).first,
                   let id = m[1], var body = m[2] else { continue }
             if let r = body.range(of: "</div>", options: .backwards) { body.removeSubrange(r.lowerBound..<body.endIndex) }
+            body = stripGameWidget(body)
             let up = Int(first(#"id="T_Up_p\d+"[^>]*>\s*(\d+)"#, in: c) ?? "") ?? 0
             let down = Int(first(#"id="T_Down_p\d+"[^>]*>\s*(\d+)"#, in: c) ?? "") ?? 0
             let author = first(#"class="RegUser"[^>]*>([^<]+)</a>"#, in: c)
@@ -268,7 +394,74 @@ enum Parser {
             if likes.contains("uArw_af") { post.myVote = 1 } else if likes.contains("dArw_af") { post.myVote = -1 }
             posts.append(post)
         }
-        return ThreadPage(title: title, posts: posts, page: page, totalPages: max(total, 1))
+        return ThreadPage(title: title, posts: posts, page: page, totalPages: max(total, 1), gameHeader: page == 1 ? gameHeader : nil)
+    }
+
+    /// Pull a compact score header out of the game-thread widget (sgt-scoreboard).
+    static func gameHeaderFromGameThread(_ html: String) -> GameHeader? {
+        guard html.contains("sgt-scoreboard") || html.contains("sgt-team-away") else { return nil }
+        func team(_ side: String) -> (rank: String?, name: String, record: String?, score: String?)? {
+            let block = first(#"<div class="sgt-team sgt-team-\#(side)"[^>]*>([\s\S]*?)(?:<div class="sgt-team sgt-team-|<div class="sgt-game-center"|<section )"#, in: html)
+                ?? first(#"<div class="sgt-team sgt-team-\#(side)"[^>]*>([\s\S]*?)</div>\s*</div>"#, in: html)
+            guard let block else { return nil }
+            let rank = first(#"class="sgt-team-rank"[^>]*>\s*([^<]+)"#, in: block).map {
+                decode($0).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let name = first(#"<strong>(?:<span class="sgt-team-rank"[^>]*>[^<]*</span>)?\s*([^<]+)</strong>"#, in: block).map {
+                decode($0).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let record = first(#"class="sgt-record"[^>]*>([^<]+)"#, in: block).map {
+                decode($0).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let score = first(#"class="sgt-(?:team-)?score(?:-value)?[^"]*"[^>]*>([^<]+)"#, in: block)
+                ?? first(#"class="sgt-points"[^>]*>([^<]+)"#, in: block)
+            let scoreTrim = score.map { decode($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            guard let name, !name.isEmpty else { return nil }
+            return (rank?.isEmpty == true ? nil : rank, name, record?.isEmpty == true ? nil : record,
+                    (scoreTrim?.isEmpty == true ? nil : scoreTrim))
+        }
+        guard let away = team("away"), let home = team("home") else { return nil }
+        let status = first(#"class="sgt-game-status"[^>]*>([^<]+)"#, in: html).map {
+            decode($0).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let date = first(#"class="sgt-game-date"[^>]*>([^<]+)"#, in: html).map {
+            decode($0).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let tv = first(#"sgt-info-tv"[^>]*>[\s\S]*?<strong>([^<]+)"#, in: html).map {
+            decode($0).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        var venue = first(#"sgt-info-venue"[^>]*>[\s\S]*?<strong>([^<]+)"#, in: html).map {
+            decode($0).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let city = first(#"sgt-info-venue"[^>]*>[\s\S]*?<strong>[^<]+</strong>\s*<span>([^<]+)"#, in: html) {
+            let c = decode(city).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !c.isEmpty { venue = [venue, c].compactMap { $0 }.joined(separator: ", ") }
+        }
+        let notes = first(#"sgt-info-betting"[^>]*>[\s\S]*?<strong>([^<]+)"#, in: html).map {
+            decode($0).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let title = GameHeader.makeTitle(away: away.name, awayRank: away.rank, awayScore: away.score,
+                                         home: home.name, homeRank: home.rank, homeScore: home.score,
+                                         status: status)
+        return GameHeader(title: title, away: away.name, home: home.name,
+                          awayRank: away.rank, homeRank: home.rank,
+                          awayScore: away.score, homeScore: home.score,
+                          awayRecord: away.record, homeRecord: home.record,
+                          status: status?.isEmpty == true ? nil : status,
+                          date: date?.isEmpty == true ? nil : date,
+                          tv: tv?.isEmpty == true ? nil : tv,
+                          venue: venue?.isEmpty == true ? nil : venue,
+                          notes: notes?.isEmpty == true ? nil : notes)
+    }
+
+    /// The first post of a game thread is a big scoreboard widget; drop it so the
+    /// condensed view isn't a wall of nav links and season stats.
+    static func stripGameWidget(_ html: String) -> String {
+        var s = html
+        s = s.replacingOccurrences(of: #"<header class="sd-scoreboard-header[\s\S]*?</header>"#, with: "", options: [.regularExpression, .caseInsensitive])
+        s = s.replacingOccurrences(of: #"<section class="sgt-op"[\s\S]*</section>"#, with: "", options: [.regularExpression, .caseInsensitive])
+        s = s.replacingOccurrences(of: #"<section class="sgt-scoreboard"[\s\S]*</section>"#, with: "", options: [.regularExpression, .caseInsensitive])
+        return s
     }
 
     /// Signed-in pages render vote links that call processvote(pID, 'u'|'d') (mb_display_v35.js).

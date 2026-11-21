@@ -16,11 +16,12 @@ struct TigerDroppingsApp: App {
 
 struct RootView: View {
     @State private var rantPath = NavigationPath()
+    @State private var rantModel = BoardModel(board: Boards.tigerRant, followsGameDay: true)
     @State private var auth = AuthModel.shared
     @State private var tab = UserDefaults.standard.integer(forKey: "demoTab")
     var body: some View {
         TabView(selection: $tab) {
-            NavigationStack(path: $rantPath) { ThreadListView(board: Boards.tigerRant) }
+            NavigationStack(path: $rantPath) { ThreadListView(model: rantModel) }
                 .onAppear {
                     // Debug hook for simulator testing: -demoThread /rant/board/slug/123/
                     if rantPath.isEmpty, let p = UserDefaults.standard.string(forKey: "demoThread") {
@@ -29,7 +30,7 @@ struct RootView: View {
                                                       lastPostTime: "", lastPostBy: "", pages: 1, sticky: false, boardName: nil))
                     }
                 }
-                .tabItem { Label("Tiger Rant", systemImage: "pawprint.fill") }.tag(0)
+                .tabItem { Label(rantModel.showingScoreBoard ? "Score Board" : "Tiger Rant", systemImage: "pawprint.fill") }.tag(0)
             NavigationStack { ThreadListView(board: Boards.trending) }
                 .tabItem { Label("Trending", systemImage: "flame.fill") }.tag(1)
             NavigationStack { BoardsView() }

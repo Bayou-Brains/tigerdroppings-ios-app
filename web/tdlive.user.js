@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TD Live for Tiger Droppings
 // @namespace    https://github.com/Bayou-Brains/tigerdroppings-ios-app
-// @version      1.0.0
+// @version      1.0.1
 // @description  Condensed dark reader for TigerDroppings: vote heat bars, Live mode, and resume where you left off.
 // @author       Bayou-Brains
 // @homepageURL  https://github.com/Bayou-Brains/tigerdroppings-ios-app
@@ -122,6 +122,10 @@
     "html.tdlive-on #lowlead, html.tdlive-on .lowLead, html.tdlive-on .editorial-card, html.tdlive-on #follow {",
     "  display:none !important;",
     "}",
+    "html.tdlive-on .err-lock { color:#fdd023 !important; background:#1a0f2e !important; }",
+    "html.tdlive-on .tdlive-lock-banner { display:block !important; margin:8px 10px 10px !important; padding:10px 12px !important;",
+    "  color:#fdd023 !important; background:#1a0f2e !important; border:1px solid rgba(253,208,35,0.35) !important;",
+    "  font-weight:650 !important; text-decoration:none !important; border-radius:8px !important; }",
     "html.tdlive-on .scoreboard-subject, html.tdlive-on .scoreboard-index, html.tdlive-on .srcdiv1, html.tdlive-on .srcdiv2 {",
     "  background:transparent !important; color:#fff !important;",
     "}",
@@ -395,6 +399,14 @@
   }
 
   function enhanceBoard() {
+    var lock = document.querySelector(".err-lock");
+    if (lock && !document.querySelector(".tdlive-lock-banner")) {
+      var banner = document.createElement("a");
+      banner.className = "tdlive-lock-banner";
+      banner.href = "/rant/lsu-score-board/";
+      banner.textContent = "This board is locked for the game. Open the LSU Score Board \u2192";
+      lock.parentNode.insertBefore(banner, lock.nextSibling);
+    }
     var rows = document.querySelectorAll("div.index.indRow, div.index.indRowAlt");
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i];
