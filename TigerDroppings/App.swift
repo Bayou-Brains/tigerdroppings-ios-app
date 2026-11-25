@@ -31,12 +31,14 @@ struct RootView: View {
                     }
                 }
                 .tabItem { Label(rantModel.showingScoreBoard ? "Score Board" : "Tiger Rant", systemImage: "pawprint.fill") }.tag(0)
+            NavigationStack { ScoresView() }
+                .tabItem { Label("Scores", systemImage: "sportscourt.fill") }.tag(1)
             NavigationStack { ThreadListView(board: Boards.trending) }
-                .tabItem { Label("Trending", systemImage: "flame.fill") }.tag(1)
+                .tabItem { Label("Trending", systemImage: "flame.fill") }.tag(2)
             NavigationStack { BoardsView() }
-                .tabItem { Label("Boards", systemImage: "list.bullet") }.tag(2)
+                .tabItem { Label("Boards", systemImage: "list.bullet") }.tag(3)
             NavigationStack { SettingsView() }
-                .tabItem { Label("Settings", systemImage: "gearshape") }.tag(3)
+                .tabItem { Label("Settings", systemImage: "gearshape") }.tag(4)
         }
         .tint(.lsuGold)
         .preferredColorScheme(.dark)
