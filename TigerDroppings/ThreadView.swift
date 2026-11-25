@@ -190,10 +190,19 @@ final class ThreadModel {
     }
 }
 
+private struct BottomMinYKey: PreferenceKey {
+    static var defaultValue: CGFloat = .infinity
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 struct ThreadView: View {
     let thread: ThreadSummary
     @State private var model: ThreadModel
     @State private var atBottom = false
+    @State private var followLive = false
+    @State private var scrollingToBottom = false
+    @State private var scrollGen = 0
+    @State private var viewportHeight: CGFloat = 0
     @State private var auth = AuthModel.shared
     @State private var draft = ""
     @State private var replyTarget: Post?
@@ -247,6 +256,7 @@ struct ThreadView: View {
                             .id("unread")
                         }
                         PostRow(post: post, isOP: post.author == thread.author,
+                                compact: model.live,
                                 onVote: { up in vote(post, up: up) },
                                 onReply: { quote in startReply(post, quote: quote) })
                             .overlay {
@@ -260,16 +270,35 @@ struct ThreadView: View {
                             .id(post.id)
                             .onAppear { reads.markSeen(threadId: thread.id, post: post, replyCount: thread.replies + liveSeen) }
                         Rectangle().fill(VoteHeat.separator).frame(height: 1)
-                            .padding(.vertical, sepGap)
+                            .padding(.vertical, model.live ? max(2, sepGap * 0.35) : sepGap)
                     }
                     footer
                     Color.clear.frame(height: 1).id("bottom")
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.preference(key: BottomMinYKey.self,
+                                                       value: geo.frame(in: .named("threadScroll")).minY)
+                            }
+                        )
                         .onAppear {
-                            atBottom = true
                             if !model.live { Task { await model.loadNext() } }
                         }
-                        .onDisappear { atBottom = false }
                 }
+            }
+            .coordinateSpace(name: "threadScroll")
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { viewportHeight = geo.size.height }
+                        .onChange(of: geo.size.height) { _, h in viewportHeight = h }
+                }
+            )
+            .onPreferenceChange(BottomMinYKey.self) { minY in
+                // In the ScrollView's coordinate space, y=0 is the top of the viewport.
+                // The bottom anchor is "near" when it's at or just past the visible fold.
+                let fold = viewportHeight > 0 ? viewportHeight : 600
+                let near = minY.isFinite && minY <= fold + 80
+                if near != atBottom { atBottom = near }
             }
             .navigationTitle(model.title)
             .navigationBarTitleDisplayMode(.inline)
@@ -319,7 +348,7 @@ struct ThreadView: View {
                             }
                         } label: { Label("Jump to first page", systemImage: "arrow.up.to.line") }
                         Button("Jump to newest page") {
-                            Task { await model.jumpToLatest(); scrollToBottom(proxy, animated: false) }
+                            Task { await model.jumpToLatest(); await scrollToBottom(proxy, animated: false) }
                         }
                         Link("Open in Safari", destination: TD.url(thread.path))
                         ShareLink(item: TD.url(thread.path))
@@ -340,36 +369,68 @@ struct ThreadView: View {
                 }
             }
             .task(id: model.live) {
-                guard model.live else { return }
+                guard model.live else {
+                    followLive = false
+                    scrollingToBottom = false
+                    return
+                }
+                followLive = true
+                model.newPostCount = 0
                 await model.jumpToLatest()
-                try? await Task.sleep(nanoseconds: 150_000_000)
-                scrollToBottom(proxy, animated: false)
+                await scrollToBottom(proxy, animated: false)
                 while !Task.isCancelled && model.live {
                     try? await Task.sleep(nanoseconds: 5_000_000_000)
                     if Task.isCancelled || !model.live { break }
-                    let wasAtBottom = atBottom
+                    if followLive { scrollingToBottom = true }
                     let added = await model.poll()
                     liveSeen += added
                     if added > 0 {
-                        if wasAtBottom { scrollToBottom(proxy, animated: true) }
-                        else { model.newPostCount += added }
+                        if followLive {
+                            await scrollToBottom(proxy, animated: false)
+                        } else {
+                            scrollingToBottom = false
+                            model.newPostCount += added
+                        }
+                    } else if !atBottom {
+                        scrollingToBottom = false
                     }
                 }
             }
             .overlay(alignment: .bottom) {
-                if model.newPostCount > 0 && !atBottom {
+                if model.newPostCount > 0 && !followLive {
                     Button {
+                        followLive = true
                         model.newPostCount = 0
-                        scrollToBottom(proxy, animated: true)
+                        Task { await scrollToBottom(proxy, animated: true) }
                     } label: {
-                        Text("\(model.newPostCount) new post\(model.newPostCount == 1 ? "" : "s") ↓")
+                        Text("↓ \(model.newPostCount) new")
                             .font(.caption.bold()).padding(.horizontal, 12).padding(.vertical, 6)
                             .background(Color.lsuPurple, in: Capsule()).foregroundStyle(.white)
                     }
                     .padding(.bottom, 12)
+                    .accessibilityLabel("\(model.newPostCount) new posts, jump to bottom")
                 }
             }
-            .onChange(of: atBottom) { _, v in if v { model.newPostCount = 0 } }
+            .onChange(of: model.posts.count) { oldCount, newCount in
+                guard model.live, newCount > oldCount, followLive else { return }
+                Task { await scrollToBottom(proxy, animated: false) }
+            }
+            .onChange(of: atBottom) { _, v in
+                if v {
+                    followLive = true
+                    model.newPostCount = 0
+                } else if model.live {
+                    // Don't unstick just because new rows pushed the anchor off-screen;
+                    // only drop follow if we're still away from the bottom after layout settles.
+                    let count = model.posts.count
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 200_000_000)
+                        if !atBottom && !scrollingToBottom && model.posts.count == count && model.live {
+                            followLive = false
+                        }
+                    }
+                }
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) { composer(proxy) }
             .onChange(of: auth.loggedIn) { _, v in if v { Task { await model.reloadLoaded() } } }
             .alert("TigerDroppings", isPresented: Binding(get: { alertText != nil }, set: { if !$0 { alertText = nil } })) {
@@ -423,7 +484,7 @@ struct ThreadView: View {
                 showToast("Reply posted")
                 if !model.hasNext || model.live {
                     _ = await model.poll()
-                    scrollToBottom(proxy, animated: true)
+                    await scrollToBottom(proxy, animated: true)
                 }
             } catch {
                 alertText = error.localizedDescription
@@ -531,15 +592,45 @@ struct ThreadView: View {
         }
     }
 
-    private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool) {
-        if animated { withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("bottom", anchor: .bottom) } }
-        else { proxy.scrollTo("bottom", anchor: .bottom) }
+    /// Scroll to the newest post after layout has settled. A second and third
+    /// unanimated pass catch LazyVStack rows that weren't measured on the first jump.
+    /// If several updates land back-to-back, only the latest generation keeps going.
+    @MainActor
+    private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool) async {
+        scrollGen += 1
+        let gen = scrollGen
+        scrollingToBottom = true
+        if model.live { followLive = true }
+        func jump(_ anim: Bool) {
+            guard gen == scrollGen else { return }
+            if anim {
+                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
+            } else {
+                var t = Transaction()
+                t.disablesAnimations = true
+                withTransaction(t) { proxy.scrollTo("bottom", anchor: .bottom) }
+            }
+        }
+        await Task.yield()
+        jump(animated)
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        guard gen == scrollGen else { return }
+        jump(false)
+        try? await Task.sleep(nanoseconds: 80_000_000)
+        guard gen == scrollGen else { return }
+        jump(false)
+        if gen == scrollGen {
+            scrollingToBottom = false
+            atBottom = true
+            if model.live { model.newPostCount = 0 }
+        }
     }
 }
 
 struct PostRow: View {
     let post: Post
     let isOP: Bool
+    var compact: Bool = false
     var onVote: (Bool) -> Void = { _ in }
     var onReply: (Bool) -> Void = { _ in }
     @AppStorage("showImages") private var showImages = true
@@ -552,25 +643,31 @@ struct PostRow: View {
     @ScaledMetric private var imgH: CGFloat = 240
 
     var body: some View {
-        VStack(alignment: .leading, spacing: gap) {
+        VStack(alignment: .leading, spacing: compact ? max(2, gap * 0.45) : gap) {
             HStack(spacing: 6) {
-                Text(post.author).font(.subheadline.weight(.bold))
+                Text(post.author).font(compact ? .caption.weight(.bold) : .subheadline.weight(.bold))
                     .foregroundStyle(isOP ? Color.lsuGold : .white)
                     .lineLimit(1).layoutPriority(1)
                 if isOP { Text("OP").font(.caption2.weight(.heavy)).padding(.horizontal, 4).padding(.vertical, 1)
                     .background(Color.lsuGold, in: RoundedRectangle(cornerRadius: 3)).foregroundStyle(.black) }
-                if let r = post.replyTo { Text("→ \(r)").font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                if let r = post.replyTo { Text("→ \(r)").font(compact ? .caption2 : .caption).foregroundStyle(.secondary).lineLimit(1) }
                 Spacer(minLength: 4)
-                Text(post.time).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                if compact && (post.up + post.down) > 0 {
+                    Text("+\(post.up) −\(post.down)")
+                        .font(.caption2.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(post.up >= post.down ? VoteHeat.green : VoteHeat.red)
+                        .lineLimit(1)
+                }
+                Text(post.time).font(compact ? .caption2 : .caption).foregroundStyle(.secondary).lineLimit(1)
             }
             ForEach(Array(post.blocks.enumerated()), id: \.offset) { _, block in
                 switch block {
                 case .text(let a):
-                    Text(a).font(.callout).lineSpacing(3).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
+                    Text(a).font(compact ? .footnote : .callout).lineSpacing(compact ? 1 : 3).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
                 case .quote(let a):
-                    Text(a).font(.subheadline).lineSpacing(2).foregroundStyle(VoteHeat.quoteText)
-                        .lineLimit(8)
-                        .padding(.horizontal, 10).padding(.vertical, 7)
+                    Text(a).font(compact ? .footnote : .subheadline).lineSpacing(compact ? 1 : 2).foregroundStyle(VoteHeat.quoteText)
+                        .lineLimit(compact ? 5 : 8)
+                        .padding(.horizontal, compact ? 8 : 10).padding(.vertical, compact ? 4 : 7)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(VoteHeat.quoteBox, in: RoundedRectangle(cornerRadius: 6))
                 case .image(let u) where u.path.lowercased().contains("/images/icons/"):
@@ -592,15 +689,17 @@ struct PostRow: View {
                          : u).font(.subheadline)
                 }
             }
-            // Action bar: vote + reply. At big text sizes Quote/Reply drop to icons.
-            ViewThatFits(in: .horizontal) {
-                actionBar(compact: false)
-                actionBar(compact: true)
+            // Hidden in Live mode so the chat stays dense; long-press still offers quote / vote / reply.
+            if !compact {
+                ViewThatFits(in: .horizontal) {
+                    actionBar(compact: false)
+                    actionBar(compact: true)
+                }
+                .padding(.top, 2)
             }
-            .padding(.top, 2)
         }
-        .padding(.vertical, vPad)
-        .padding(.horizontal, hPad)
+        .padding(.vertical, compact ? max(4, vPad * 0.4) : vPad)
+        .padding(.horizontal, compact ? max(8, hPad * 0.7) : hPad)
         .voteEdges(up: post.up, down: post.down)
         .contextMenu {
             Button { onReply(false) } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
