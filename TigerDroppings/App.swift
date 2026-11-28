@@ -18,6 +18,7 @@ struct RootView: View {
     @State private var rantPath = NavigationPath()
     @State private var rantModel = BoardModel(board: Boards.tigerRant, followsGameDay: true)
     @State private var auth = AuthModel.shared
+    @State private var tour = ThreadTourController.shared
     @State private var tab = UserDefaults.standard.integer(forKey: "demoTab")
     var body: some View {
         TabView(selection: $tab) {
@@ -43,6 +44,11 @@ struct RootView: View {
         .tint(.lsuGold)
         .preferredColorScheme(.dark)
         .appTextSize()
+        .overlay {
+            if tour.step != nil {
+                ThreadTourOverlay(tour: tour)
+            }
+        }
         .sheet(isPresented: $auth.showLogin) { LoginView().appTextSize() }
         .onAppear { if UserDefaults.standard.bool(forKey: "demoLogin") { auth.showLogin = true } }
         .task { if AuthModel.shared.loggedIn { await AuthModel.shared.verify() } }

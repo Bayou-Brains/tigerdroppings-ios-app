@@ -12,6 +12,10 @@ A fast, chat-style Tiger Droppings app for iPhone: an unofficial reader for the 
 <img src="screenshots/summary.png" width="260" alt="Thread summary">
 </p>
 <p>
+<img src="screenshots/tour1.png" width="260" alt="First-time tour pointing at the thread summary button">
+<img src="screenshots/tour2.png" width="260" alt="First-time tour pointing at Live mode">
+</p>
+<p>
 <img src="screenshots/scores.png" width="260" alt="Scores">
 <img src="screenshots/scores_ai.png" width="260" alt="Quick rundown on Scores">
 </p>
@@ -28,6 +32,7 @@ A fast, chat-style Tiger Droppings app for iPhone: an unofficial reader for the 
 - **Scores**: a dedicated tab for the [TigerDroppings scoreboard](https://www.tigerdroppings.com/scores/scoreboard.aspx), with NCAAF/NCAAB, conference or group filters, and week or date paging. Live, scheduled, and final games are listed in the app's condensed dark style. LSU games are pinned at the top even when they aren't on the Top 25 board. The list auto-refreshes about every 30 seconds while games are live. Tap a game to open its game thread when the site has one, or a game recap.
 - **Score rundown**: a Quick rundown of LSU, live games, top-25 upsets, and close finishes is built on every phone. On iPhone 15 Pro or newer with Apple Intelligence, it can be rewritten on-device as Today's rundown. Each game also has a Catch me up recap, which includes top-voted posts when a game thread is available. No cloud API keys.
 - **Endless scrolling** through boards and threads.
+- **First-time tour**: the first time you open a thread, a short guide points at the sparkles button (thread summary) and then the Live play button. Tap Next, Done, or tap outside to skip. It only shows once.
 - **Live mode**: polls every 5 seconds and drops new posts in place so a thread reads like a chat. In Live mode, posts are tighter (no per-post reply, quote, or vote buttons—the composer at the bottom is how you reply) so a fast thread is easier to follow, and the view stays pinned to the newest post unless you scroll up, in which case a “↓ N new” pill jumps you back.
 - **Pick up where you left off**: a "+N" badge for new replies since your last visit, and threads reopen at your last-read post with a "NEW POSTS BELOW" marker.
 - **Thread summary**: on-device AI summary with Apple Intelligence (iPhone 15 Pro or newer, iOS 26). No accounts or API keys. Other phones get quick stats (most active posters and every top-voted post). Tap a top-voted post to jump to it in the thread; the back button returns you to the summary.

@@ -16,6 +16,7 @@
 		7C0D496739800E8BC7D29375 /* Scraper.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE2F78D8CE34C7739EE59B77 /* Scraper.swift */; };
 		82F9F5ED8FCB93E6D7B2FDA0 /* ScoresView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3ADDC893BCD882981841885 /* ScoresView.swift */; };
 		A3BDD144D55EDF07A197171F /* Summarizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8191052FADB425BF9B83C0A /* Summarizer.swift */; };
+		B271E8E7B62ED960A397E90F /* ThreadTour.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98C4CDF50614BC2516A0E5C7 /* ThreadTour.swift */; };
 		BE40DF92468835C77794E718 /* Posting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D123300B25AA1662DDA8753 /* Posting.swift */; };
 		C8003531701E1EA72C33C8DA /* TextSize.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FA8284F9DF84EFA04E9967D /* TextSize.swift */; };
 		D23BDA4C6D38FCF0537601CC /* ThreadListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 987056CE75625880FB3740E0 /* ThreadListView.swift */; };
@@ -33,6 +34,7 @@
 		8B05A39E3FCEAA30471E94AF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8F299F84A7D6DA5713B7947F /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		987056CE75625880FB3740E0 /* ThreadListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadListView.swift; sourceTree = "<group>"; };
+		98C4CDF50614BC2516A0E5C7 /* ThreadTour.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadTour.swift; sourceTree = "<group>"; };
 		A5257A489512A30EBA72D7F4 /* Scoreboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Scoreboard.swift; sourceTree = "<group>"; };
 		AE2F78D8CE34C7739EE59B77 /* Scraper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Scraper.swift; sourceTree = "<group>"; };
 		D3ADDC893BCD882981841885 /* ScoresView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoresView.swift; sourceTree = "<group>"; };
@@ -72,6 +74,7 @@
 				E8191052FADB425BF9B83C0A /* Summarizer.swift */,
 				3FA8284F9DF84EFA04E9967D /* TextSize.swift */,
 				987056CE75625880FB3740E0 /* ThreadListView.swift */,
+				98C4CDF50614BC2516A0E5C7 /* ThreadTour.swift */,
 				53DE76D869EB931151019D49 /* ThreadView.swift */,
 				704DC122E0590BC08486D1E9 /* VoteColor.swift */,
 			);
@@ -159,6 +162,7 @@
 				A3BDD144D55EDF07A197171F /* Summarizer.swift in Sources */,
 				C8003531701E1EA72C33C8DA /* TextSize.swift in Sources */,
 				D23BDA4C6D38FCF0537601CC /* ThreadListView.swift in Sources */,
+				B271E8E7B62ED960A397E90F /* ThreadTour.swift in Sources */,
 				33EF69FD2239F6CF051AA272 /* ThreadView.swift in Sources */,
 				5A57BA7A49E98A4F05FADC4B /* VoteColor.swift in Sources */,
 			);
@@ -202,7 +206,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 6FU8ZY7A39;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -262,7 +266,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 6FU8ZY7A39;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

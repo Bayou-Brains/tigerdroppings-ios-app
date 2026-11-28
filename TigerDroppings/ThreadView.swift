@@ -334,10 +334,13 @@ struct ThreadView: View {
                             .foregroundStyle(.white)
                     }
                     .accessibilityIdentifier("liveToggle")
+                    .tourAnchor("live")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showSummary = true } label: { Image(systemName: "sparkles") }
                         .accessibilityLabel("Summarize thread")
+                        .accessibilityIdentifier("summarizeThread")
+                        .tourAnchor("ai")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -362,6 +365,8 @@ struct ThreadView: View {
                     proxy.scrollTo(r.lastPostId, anchor: .top)
                 }
             }
+            .onAppear { ThreadTourController.shared.startIfNeeded() }
+            .onDisappear { ThreadTourController.shared.dismissIfActive() }
             .sheet(isPresented: $showSummary, onDismiss: { jumpToPicked(proxy) }) {
                 SummaryView(model: model, summary: summary) { post in
                     pendingJump = post.id
